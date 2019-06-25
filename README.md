@@ -1,0 +1,1 @@
+# hogeo_no_bash_tools
