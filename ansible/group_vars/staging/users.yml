@@ -1,0 +1,5 @@
+users:
+  - {name: 'admin', group: 'admin', sudo: 'yes'}
+  - {name: 'taro', group: 'taro', sudo: 'no'}
+  - {name: 'jiro', group: 'jiro', sudo: 'no'}
+  - {name: 'saburo', group: 'saburo', sudo: 'no'}

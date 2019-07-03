@@ -1,0 +1,12 @@
+- name: create deploy group
+  group:
+    name: deploy
+- name: set ansible user to deploy group
+  user:
+    name: ansible
+    group: deploy
+- include: inner-tasks.yml
+  with_items:
+    - "{{ users }}"
+  loop_control:
+    loop_var: user

@@ -1,0 +1,26 @@
+- name: create user
+  user:
+    name: "{{user.name}}"
+    shell: /bin/bash
+    group: "{{user.group}}"
+    createhome: yes
+- name: mkdir .ssh
+  file: dest=/home/{{user.name}}/.ssh state=directory owner={{user.name}} group=deploy mode=700
+
+- name: add authorized keys
+  file: dest=/home/{{user.name}}/.ssh/authorized_keys state=touch owner={{user.name}} group=deploy mode=600
+
+- name: check public key exist
+  local_action: stat path=/home/ubuntu/pubkeys/{{user.name}}.pub
+  register: public_key
+
+- name: copy publickey
+  copy: src=/home/ubuntu/pubkeys/{{user.name}}.pub dest=/home/{{user.name}}/.ssh/authorized_keys
+  when: public_key.stat.exists
+
+- name: set visudo
+  lineinfile:
+    dest: /etc/sudoers
+    backup: yes
+    line: "{{user.name}} ALL=(ALL) NOPASSWD: ALL"
+  when: user.sudo == 'yes'
