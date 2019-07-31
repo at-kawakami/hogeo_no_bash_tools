@@ -1,7 +1,14 @@
 #!/bin/bash
-# source: https://dev.classmethod.jp/cloud/aws/using-ansible-at-autoscaling-launching/
+if [ $# -lt 3 ];then
+  echo '[' `date "+%Y/%m/%d:%H:%M:%S"` '] End: [AWS account] [ENV](prod, stg) [SERVICE](web, adm, api) is required'
+  exit 1
+fi
 echo '[' `date "+%Y/%m/%d:%H:%M:%S"` ']' Start
-Lock_file="/tmp/hook_sqs_autoscaling.lock"
+aws_account="$1"
+target_env="$2"
+target_service="$3"
+private_key="your_key"
+Lock_file="/tmp/hook_${target_service}_sqs_autoscaling.lock"
 if [ -f $Lock_file ];then
   echo '[' `date "+%Y/%m/%d:%H:%M:%S"` '] End: lock file has found, not start this script'
   exit 0
@@ -12,9 +19,10 @@ touch $Lock_file
 # Command path
 AWS="/usr/local/bin/aws"
 JQ="/usr/local/bin/jq"
+TOOL_PATH="/home/deploy/tools"
 
 # variable
-QUEUE_URL="https://sqs.ap-northeast-1.amazonaws.com/xxxxxxxxxxxx/ansible-auto-scaling-queue"
+QUEUE_URL="https://sqs.ap-northeast-1.amazonaws.com/${aws_account}/${target_env}-${target_service}-autoscaling-queue"
 Messages="`$AWS sqs receive-message --queue-url $QUEUE_URL`"
 ReceiptHandle=`echo $Messages | $JQ -r '.Messages[].ReceiptHandle'`
 Body=`echo $Messages | $JQ -r '.Messages[].Body' | sed -e 's/\\\"/\"/g'`
@@ -28,7 +36,9 @@ LifecycleTransition=`echo $Body | $JQ -r '.LifecycleTransition'`
 LifecycleActionToken=`echo $Body | $JQ -r '.LifecycleActionToken'`
 EC2InstanceId=`echo $Body | $JQ -r '.EC2InstanceId'`
 AutoScalingGroupName=`echo $Body | $JQ -r '.AutoScalingGroupName'`
+AnsiblePlaybookPath="/path/to/ansible"
  
+# TEST_NOTIFICATION絶対殺すマン
 if [ "$LifecycleActionToken" = "null" ]; then
   is_test_notification="`echo ${Body} \| grep TEST_NOTIFICATION > /dev/null 2>&1;echo $?`"
   if [ $is_test_notification -eq 0 ];then
@@ -52,20 +62,20 @@ if [ "$State" != "enabled" ]; then
 fi
 
 echo "[$AutoScalingGroupName]" > hosts_$EC2InstanceId
-echo "$hosts_$EC2InstanceId  ansible_ssh_host=$PrivateIp ansible_python_interpreter=/usr/bin/python3 db_migrate=True" >> hosts_$EC2InstanceId
+echo "$hosts_$EC2InstanceId  ansible_ssh_host=$PrivateIp ansible_python_interpreter=/usr/bin/python3 db_migrate=True ansible_ssh_user=ubuntu" >> hosts_$EC2InstanceId
 echo "setup instance: $EC2InstanceId ($PrivateIp)"
 
 if [ `echo $AutoScalingHookName | grep terminate` ];then
   NextStatus="Shutdown"
 fi
 
-echo "receive queue from SQS. $EC2InstanceId ($PrivateIp) has $AutoScalingHookName"|bash -x /home/ubuntu/tools/bin/slack_notify.bash  -m "Start to Ansible playbook" -i ':man-raising-hand: '
+echo "receive queue from SQS. $EC2InstanceId ($PrivateIp) has $AutoScalingHookName"|bash -x ${TOOL_PATH}/bin/slack_notify.bash  -m "Start to Ansible playbook" -i ':man-raising-hand: '
 
-cd ansible_repos
-ansible-playbook -i ../hosts_${EC2InstanceId} --private-key=~/.ssh/hoge_key ${AutoScalingHookName}.yml --vault-password-file ~/.vault_password -v
+cd $AnsiblePlaybookPath
+ansible-playbook -i ../hosts_${EC2InstanceId} --private-key=${private_key} ${AutoScalingHookName}.yml --vault-password-file ~/.vault_password -v
 if [ $? -ne 0 ];then
   echo '[' `date "+%Y/%m/%d:%H:%M:%S"` ']'Fatal: Failed to execute ansible
-  echo "Failed: Ansible deploy: $AutoScalingHookName $EC2InstanceId ($PrivateIp)"|bash -x /home/ubuntu/tools/bin/slack_notify.bash  -m 'Oops!' -i ':male_zombie:'
+  echo "Failed: Ansible deploy: $AutoScalingHookName $EC2InstanceId ($PrivateIp)"|bash -x ${TOOL_PATH}/bin/slack_notify.bash  -m 'Oops!' -i ':male_zombie:'
   exit 1
   # Todo: 失敗した時、lockファイルは残すべきか・・・
 fi
@@ -93,6 +103,6 @@ else
   exit 1
 fi
 
-echo "playbook: ${AutoScalingHookName}.yml applied to $EC2InstanceId ($PrivateIp)"|bash -x /home/ubuntu/tools/bin/slack_notify.bash  -m "Success to Ansible playbook" -i ':man-gesturing-ok:'
+echo "playbook: ${AutoScalingHookName}.yml applied to $EC2InstanceId ($PrivateIp)"|bash -x ${TOOL_PATH}/bin/slack_notify.bash  -m "Success to Ansible playbook" -i ':ok_woman:'
 rm $Lock_file
 echo '[' `date "+%Y/%m/%d:%H:%M:%S"` '] End: Success'
