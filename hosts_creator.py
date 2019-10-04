@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import os
+import sys
 import boto3
 import subprocess
 
@@ -38,7 +39,6 @@ def update_hosts(host_ip_list, app, color):
     try:
             file = open(HOSTS_TMP, 'a')
             for (offset, host_ip) in enumerate(host_ip_list):
-                #print('host_ip:' + host_ip[])
                 file.write(' '.join(host_ip) + ' ' + app + str(offset + 1) + color + '\n')
 
     except Exception as e:
@@ -48,9 +48,11 @@ def update_hosts(host_ip_list, app, color):
     return HOSTS_TMP
 
 if __name__ == '__main__':
+    args = sys.argv
+
     HOSTS_ORG = "/etc/hosts_org"
     HOSTS_TMP = '/tmp/hosts_tmp'
-    TARGET = "sandbox"
+    TARGET = args[1]
     APPLICATION = ["web", 'adm', 'api']
     COLOR = ['blue','green']
 
@@ -65,5 +67,4 @@ if __name__ == '__main__':
     with open('/etc/hosts', 'w') as hosts:
         for fname in filenames:
             with open(fname) as infile:
-                for line in infile:
-                    hosts.write(infile.read())
+                hosts.write(infile.read())
