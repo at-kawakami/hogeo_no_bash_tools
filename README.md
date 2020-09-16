@@ -1,4 +1,4 @@
-# hogeo_no_bash_tools aaa
+# hogeo_no_bash_tools
 
 ### ansible_hosts_creator.bash
 /etc/hostsから特定のホスト名を引っこ抜いて、ansible用のhostsを標準出力する。
